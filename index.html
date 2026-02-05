@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BULK Quiz — Truth or False</title>
+<style>
+body {
+  margin:0;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg,#2c2c2c,#4b4b4b,#1f1f1f);
+  color:white;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+/* START SCREEN */
+#startScreen { text-align:center; }
+.startBtn {
+  padding:18px 34px;
+  font-size:20px;
+  border:none;
+  border-radius:16px;
+  cursor:pointer;
+  color:white;
+  background: linear-gradient(90deg,#6b7280,#9ca3af);
+  animation:pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow:0 0 0 0 rgba(156,163,175,0.7); }
+  70% { box-shadow:0 0 30px 18px rgba(156,163,175,0); }
+  100% { box-shadow:0 0 0 0 rgba(156,163,175,0); }
+}
+
+/* GAME CARD */
+.card {
+  display:none;
+  background: rgba(32,32,32,0.92);
+  border:1px solid #9ca3af;
+  padding:30px;
+  border-radius:18px;
+  width:600px;
+  text-align:center;
+  box-shadow:0 0 40px rgba(156,163,175,0.35);
+}
+
+h1 { color:#d1d5db; margin-top:0; }
+
+button.answerBtn {
+  padding:14px 18px;
+  margin:10px;
+  border:none;
+  border-radius:12px;
+  font-size:16px;
+  cursor:pointer;
+  width:80%;
+  transition:0.25s;
+  color:white;
+}
+.btnA { background: linear-gradient(90deg,#6b7280,#9ca3af); }
+.btnB { background: linear-gradient(90deg,#4b5563,#6b7280); }
+button.answerBtn:hover { transform:scale(1.05); box-shadow:0 0 16px rgba(156,163,175,0.7); }
+
+img { width:160px; margin-top:15px; }
+
+#resultBox { display:none; }
+
+input {
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  width:70%;
+  text-align:center;
+  font-size:16px;
+}
+
+#certificatePreview {
+  display:none;
+  margin-top:15px;
+  border-radius:12px;
+  box-shadow:0 0 25px rgba(156,163,175,0.6);
+  max-width:100%;
+}
+</style>
+</head>
+<body>
+
+<!-- START -->
+<div id="startScreen">
+  <h1>BULK Quiz</h1>
+  <p>Truth or False Edition</p>
+  <button class="startBtn" id="startButton">START</button>
+</div>
+
+<!-- GAME -->
+<div class="card" id="gameCard">
+  <h1>BULK Quiz</h1>
+  <h3 id="question"></h3>
+
+  <div id="answers">
+    <button class="answerBtn btnA" onclick="choose(0)" id="a0"></button>
+    <button class="answerBtn btnB" onclick="choose(1)" id="a1"></button>
+  </div>
+
+  <div id="feedback"></div>
+
+  <div id="resultBox">
+    <h3>Final Score</h3>
+    <p id="scoreText"></p>
+    <input id="nickname" placeholder="Enter your nickname">
+    <br><br>
+    <button class="answerBtn btnA" onclick="buildCertificate()">Generate Certificate</button>
+    <button class="answerBtn btnB" onclick="downloadCertificate()">Download Certificate</button>
+    <br>
+    <canvas id="certCanvas" width="900" height="500" style="display:none;"></canvas>
+    <img id="certificatePreview">
+  </div>
+</div>
+
+<!-- AUDIO -->
+<audio id="soundTrue" src="sounds/correct.mp3"></audio>
+<audio id="soundFalse" src="sounds/wrong.mp3"></audio>
+<audio id="bgMusic" src="sounds/bg.mp3" loop></audio>
+
+<script>
+// ELEMENTS
+const startScreen = document.getElementById("startScreen");
+const startButton = document.getElementById("startButton");
+const gameCard = document.getElementById("gameCard");
+const bgMusic = document.getElementById("bgMusic");
+const question = document.getElementById("question");
+const a0 = document.getElementById("a0");
+const a1 = document.getElementById("a1");
+const feedback = document.getElementById("feedback");
+const answers = document.getElementById("answers");
+const resultBox = document.getElementById("resultBox");
+const scoreText = document.getElementById("scoreText");
+const nickname = document.getElementById("nickname");
+const certCanvas = document.getElementById("certCanvas");
+const certificatePreview = document.getElementById("certificatePreview");
+const soundTrue = document.getElementById("soundTrue");
+const soundFalse = document.getElementById("soundFalse");
+
+// QUESTIONS
+const questions = [
+{q:"BULK Exchange is designed to deliver high-performance decentralized trading", options:["True","False"], correct:0},
+{q:"BULK uses a leader-based sequencer to order transactions", options:["True","False"], correct:1},
+{q:"BULK Tile runs trading logic entirely in memory for low latency", options:["True","False"], correct:0},
+{q:"BULK Net achieves sub-20ms propagation times using UDP and erasure coding", options:["True","False"], correct:0},
+{q:"BULK Db is a peer-replicated key-value database for trade logs", options:["True","False"], correct:0},
+{q:"BULK allows only Market orders, not Limit orders", options:["True","False"], correct:1},
+{q:"Take Profit and Stop Loss orders on BULK are triggered by Mark Price", options:["True","False"], correct:0},
+{q:"BULK supports reduce-only orders to manage risk", options:["True","False"], correct:0},
+{q:"Economic finality in BULK is slower than settlement finality", options:["True","False"], correct:1},
+{q:"BULK architecture has bridges and sequencers like typical Layer-2s", options:["True","False"], correct:1}
+];
+
+let index=0;
+let score=0;
+
+/* START GAME */
+startButton.addEventListener("click", ()=>{
+  startScreen.style.display="none";
+  gameCard.style.display="block";
+  bgMusic.volume=0.1;
+  bgMusic.play();
+  showQuestion();
+});
+
+/* GAME FUNCTIONS */
+function playSound(ok){ ok ? soundTrue.play() : soundFalse.play(); }
+
+function showQuestion(){
+  feedback.innerHTML="";
+  const q = questions[index];
+  question.innerText = q.q;
+  a0.innerText = q.options[0];
+  a1.innerText = q.options[1];
+}
+
+function choose(i){
+  const ok = i===questions[index].correct;
+  playSound(ok);
+  if(ok){ score++; feedback.innerHTML=`<img src="images/true.png"><p>Correct ✅</p>`; }
+  else{ feedback.innerHTML=`<img src="images/false.png"><p>Wrong ❌</p>`; }
+
+  setTimeout(()=>{
+    index++;
+    if(index<questions.length) showQuestion();
+    else finishGame();
+  },1400);
+}
+
+function finishGame(){
+  answers.style.display="none";
+  question.style.display="none";
+  feedback.innerHTML="";
+  resultBox.style.display="block";
+  scoreText.innerText=`You got ${score} out of ${questions.length}`;
+}
+
+/* CERTIFICATE WITH RANK BADGE */
+function getRank(score,total){
+  if(score===total) return {name:"BULK MASTER", color:"#facc15"};
+  if(score>=7) return {name:"TRADING PRO", color:"#9ca3af"};
+  if(score>=4) return {name:"MARKET EXPLORER", color:"#6b7280"};
+  return {name:"DEFI ROOKIE", color:"#4b5563"};
+}
+
+function drawBadge(ctx,x,y,r,text,color){
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.globalAlpha=0.25; ctx.fill(); ctx.globalAlpha=1;
+  ctx.beginPath(); ctx.arc(x,y,r-10,0,Math.PI*2);
+  ctx.fillStyle="#2c2c2c"; ctx.fill();
+  ctx.strokeStyle=color; ctx.lineWidth=4; ctx.stroke();
+  ctx.fillStyle=color; ctx.font="bold 14px Arial"; ctx.textAlign="center";
+  wrapText(ctx,text,x,y+5,90,16);
+}
+
+function wrapText(ctx,text,x,y,maxWidth,lineHeight){
+  const words=text.split(' '); let line=''; let lines=[];
+  for(let n=0;n<words.length;n++){
+    const testLine=line+words[n]+' '; const w=ctx.measureText(testLine).width;
+    if(w>maxWidth && n>0){ lines.push(line); line=words[n]+' '; } else line=testLine;
+  }
+  lines.push(line);
+  lines.forEach((l,i)=>{ ctx.fillText(l.trim(),x,y+i*lineHeight); });
+}
+
+function buildCertificate(){
+  const nick = nickname.value || "BULK Trader";
+  const c = certCanvas; const ctx = c.getContext("2d");
+  const rank = getRank(score,questions.length);
+
+  const g = ctx.createLinearGradient(0,0,900,500);
+  g.addColorStop(0,"#2c2c2c"); g.addColorStop(1,"#4b4b4b");
+  ctx.fillStyle=g; ctx.fillRect(0,0,900,500);
+
+  ctx.strokeStyle="#9ca3af"; ctx.lineWidth=6; ctx.strokeRect(20,20,860,460);
+
+  ctx.fillStyle="#d1d5db"; ctx.font="bold 44px Arial"; ctx.textAlign="center";
+  ctx.fillText("BULK CERTIFICATE",450,110);
+  ctx.font="22px Arial"; ctx.fillText("Truth or False Quiz Completion",450,155);
+
+  ctx.font="bold 36px Arial"; ctx.fillStyle="#ffffff"; ctx.fillText(nick,450,230);
+  ctx.font="28px Arial"; ctx.fillStyle="#d1d5db"; ctx.fillText(`Score: ${score} / ${questions.length}`,450,285);
+  ctx.font="bold 26px Arial"; ctx.fillStyle=rank.color; ctx.fillText(`Rank: ${rank.name}`,450,330);
+  drawBadge(ctx,720,250,60,rank.name,rank.color);
+
+  ctx.font="18px Arial"; ctx.fillStyle="#9ca3af";
+  ctx.fillText("BULK Exchange — High-Performance DeFi",450,410);
+
+  certificatePreview.src=c.toDataURL(); certificatePreview.style.display="block";
+}
+
+function downloadCertificate(){
+  buildCertificate();
+  const link=document.createElement("a");
+  link.download="bulk-certificate.png";
+  link.href=certCanvas.toDataURL();
+  link.click();
+}
+</script>
+</body>
+</html>
